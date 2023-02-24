@@ -3,7 +3,7 @@ package lru
 type Node[k comparable, v any] struct {
 	pre, nxt *Node[k, v]
 	value    v
-	key      any
+	key      k
 }
 
 type List[k comparable, v any] struct {
@@ -12,11 +12,15 @@ type List[k comparable, v any] struct {
 	size int
 }
 
+// ListIterateFunc provide iterate function, stop iterate if return true
+type IterateFunc[k comparable, v any] func(key k, value v) (stop_iterate bool)
+
 type IList[k comparable, v any] interface {
 	Prepend(key k, value v) *Node[k, v]
 	Append(key k, value v) *Node[k, v]
 	MoveToFront(*Node[k, v])
 	Len() int
+	Iterate(iterateFunc IterateFunc[k, v])
 }
 
 func NewList[k comparable, v any]() *List[k, v] {
@@ -42,6 +46,7 @@ func (list *List[k, v]) Prepend(key k, value v) *Node[k, v] {
 		key:   key,
 		value: value,
 	}
+	list.head.nxt.pre = node
 	list.head.nxt = node
 	list.size += 1
 	return list.head.nxt
@@ -69,7 +74,7 @@ func (list *List[k, v]) MoveToFront(node *Node[k, v]) {
 
 	node.pre = list.head
 	node.nxt = list.head.nxt
-	list.head.nxt.pre = node
+	node.nxt.pre = node
 	list.head.nxt = node
 }
 
@@ -81,6 +86,14 @@ func (list *List[k, v]) Remove(node *Node[k, v]) {
 
 func (list *List[k, v]) Len() int {
 	return list.size
+}
+
+func (list *List[k, v]) Iterate(iterateFunc IterateFunc[k, v]) {
+	for node := list.head.nxt; node != nil && node != list.tail; node = node.nxt {
+		if iterateFunc(node.key, node.value) {
+			return
+		}
+	}
 }
 
 // Lru implements a non-thread-safe lib of lru cache
@@ -96,6 +109,8 @@ type ILru[k comparable, v any] interface {
 	RemoveOldest() (key k, value v)
 	Clear()
 	Len() int
+	Iterate(iterateFunc IterateFunc[k, v])
+	IterateList(iterateFunc IterateFunc[k, v])
 }
 
 func NewLru[k comparable, v any]() *Lru[k, v] {
@@ -139,4 +154,8 @@ func (lru *Lru[k, v]) Clear() {
 
 func (lru *Lru[k, v]) Len() int {
 	return lru.list.Len()
+}
+
+func (lru *Lru[k, v]) Iterate(iterateFunc IterateFunc[k, v]) {
+	lru.list.Iterate(iterateFunc)
 }
